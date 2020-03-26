@@ -1,0 +1,113 @@
+{
+  "Comment": "FW-VPN state function.",
+  "StartAt": "create_aws_vpn",
+  "States": {
+    "create_aws_vpn": {
+      "Type": "Task",
+      "Resource": "${ConfigAwsVpn}",
+      "Next": "aws_vpn_configured",
+      "TimeoutSeconds": 230,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.Timeout"
+          ],
+          "Next": "FailState"
+        }
+      ]
+    },
+    "aws_vpn_configured": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Action",
+          "StringEquals": "config_aws_success",
+          "Next": "config_fw"
+        },
+        {
+          "Variable": "$.Action",
+          "StringEquals": "config_aws_failed",
+          "Next": "delete_aws_vpn"
+        }
+      ]
+    },
+    "config_fw": {
+      "Type": "Task",
+      "Resource": "${ConfigFw}",
+      "Next": "fw_configured",
+      "TimeoutSeconds": 890,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.Timeout"
+          ],
+          "Next": "delete_aws_vpn"
+        }
+      ]
+    },
+    "fw_configured": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Action",
+          "StringEquals": "config_fw_success",
+          "Next": "create_panw_vpn"
+        },
+        {
+          "Variable": "$.Action",
+          "StringEquals": "config_fw_failed",
+          "Next": "delete_aws_vpn"
+        }
+      ]
+    },
+    "create_panw_vpn": {
+      "Type": "Task",
+      "Resource": "${ConfigPanwVpn}",
+      "Next": "panw_vpn_configured",
+      "TimeoutSeconds": 590,
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.Timeout"
+          ],
+          "Next": "delete_fw_vpn"
+        }
+      ]
+    },
+    "panw_vpn_configured": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.Action",
+          "StringEquals": "config_fw_vpn_success",
+          "Next": "modify_bgp"
+        },
+        {
+          "Variable": "$.Action",
+          "StringEquals": "config_fw_vpn_failed",
+          "Next": "delete_fw_vpn"
+        }
+      ]
+    },
+    "delete_fw_vpn": {
+      "Type": "Task",
+      "Resource": "${DeleteFwVpn}",
+      "Next": "delete_aws_vpn"
+    },
+    "delete_aws_vpn": {
+      "Type": "Task",
+      "Resource": "${DeleteAwsVpn}",
+      "Next": "FailState"
+    },
+    "modify_bgp": {
+      "Type": "Task",
+      "Resource": "${UpdateRoutes}"
+      "End": true
+    },
+    "FailState": {
+      "Type": "Fail",
+      "Cause": "Failed to create VPN",
+      "Error": "Creation Error"
+    }
+  }
+}
